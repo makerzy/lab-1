@@ -535,7 +535,7 @@ contract ShippmentManager {
         uint256 shippmentId
     );
 
-    function initializeShipment(
+    function initializeShippment(
         address _owner,
         uint256 _shippmentPrice,
         string calldata _content
@@ -575,7 +575,7 @@ contract ShippmentManager {
         uint256 shippmentId
     );
 
-    function DepositMoneyforShipment(uint256 Id)
+    function depositMoneyforShipment(uint256 Id)
         external
         payable
         ContainerExist(Id)
@@ -613,7 +613,7 @@ contract ShippmentManager {
 
     event ShippmentStarted(address sender, PackageState state);
 
-    function StartShippment(uint256 shippmentId)
+    function startShippment(uint256 shippmentId)
         external
         OnlyContainerOwner(shippmentId)
     {
