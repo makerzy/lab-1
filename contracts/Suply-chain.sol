@@ -509,6 +509,8 @@ contract ShippmentManager {
     }
 
     uint256 public CONTAINER_ID = 0;
+    uint256 public  DELAY = 48 hours;
+
     enum ViolationType {
         None,
         Open,
@@ -644,26 +646,42 @@ contract ShippmentManager {
         container.shippmentReceivedTime = _blocktime();
         emit ShippmentCompleted(_msgSender(), shippmentId);
     }
+    
+    event shipmentArrivedWithViolation(address sender, uint256 shippmentId, uint8 violation);
+    // Function Overloading
+    function arrivedWithViolation(uint256 shippmentId, uint8 violation)
+        external
+        OnlyContainerReceiver(shippmentId)
+        ContainerExist(shippmentId)
+    {
+        Container storage container = getContainer[shippmentId];
+        require(
+            container.state == PackageState.StartShippment,
+            "ShippmentManager: shippment received too early"
+        );
+        container.state = PackageState.ShipmentReceived;
+        container.shippmentReceivedTime = _blocktime();
+        container.violation = ViolationType(violation);
+
+        emit shipmentArrivedWithViolation(_msgSender(), shippmentId, violation);
+    }
 
     event ViolationReported(
         address sender,
         uint256 shippmentId,
-        ViolationType violation
+        uint8 violation
     );
 
-    function reportViolation(uint256 shippmentId, ViolationType violation)
+    function reportViolation(uint256 shippmentId, uint8 violation)
         external
         ContainerExist(shippmentId)
+        OnlyContainerReceiver(shippmentId)
     {
+        require(violation >= 0 && violation <= 3, "invalid violation type");
         Container storage container = getContainer[shippmentId];
-        // refund the buyer
-        (bool sent, ) = payable(container.receiver).call{
-            value: container.shipmentPrice
-        }("");
-        require(sent, "Failed to send Ether");
-        container.violation = violation;
-        container.state = PackageState.Aborted;
+        container.violation = ViolationType(violation);
         emit ViolationReported(_msgSender(), shippmentId, violation);
+        
     }
 
     modifier OnlyOwner() {
@@ -671,16 +689,21 @@ contract ShippmentManager {
         _;
     }
 
+    event ShippmentMoneySent(address sender,uint256 shippmentId, uint256 value);
     function getShipmentMoney(uint256 shippmentId)
         external
         OnlyContainerOwner(shippmentId)
     {
         Container storage container = getContainer[shippmentId];
+        require(container.violation == ViolationType.None, "violation reported");
+        require(_blocktime() > container.shippmentReceivedTime.add(DELAY), "withdraw request too early");
+
         // refund the buyer
         (bool sent, ) = payable(container.owner).call{
             value: container.shipmentPrice
         }("");
         require(sent, "Failed to send Ether");
+        emit ShippmentMoneySent(_msgSender(), shippmentId, container.shipmentPrice);
     }
 
     event Refund(address sender, uint256 amount, uint256 shippmentId);
